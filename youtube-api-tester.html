@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>YouTube API Tester</title>
+<style>
+  :root {
+    --bg: #0f0f0f;
+    --card: #1a1a1a;
+    --border: #2e2e2e;
+    --text: #f1f1f1;
+    --text-secondary: #a0a0a0;
+    --accent: #ff0033;
+    --accent-hover: #e6002e;
+    --success: #2ecc71;
+    --danger: #ff5555;
+    --mono: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 24px;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  .wrap { max-width: 800px; margin: 0 auto; }
+  h1 { font-size: 20px; font-weight: 600; margin: 0 0 4px; }
+  .subtitle { color: var(--text-secondary); font-size: 14px; margin: 0 0 24px; }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px;
+    margin-bottom: 16px;
+  }
+  label {
+    display: block;
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin-bottom: 6px;
+  }
+  input[type="text"], input[type="password"], select {
+    width: 100%;
+    padding: 10px 12px;
+    background: #111;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-size: 14px;
+    margin-bottom: 14px;
+  }
+  input:focus, select:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+  .row { display: flex; gap: 12px; }
+  .row > div { flex: 1; }
+  button {
+    background: var(--accent);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    padding: 10px 18px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  button:hover { background: var(--accent-hover); }
+  button:disabled { opacity: 0.6; cursor: not-allowed; }
+  button.secondary {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-weight: 400;
+    padding: 6px 12px;
+    font-size: 12px;
+  }
+  button.secondary:hover { background: #222; }
+  .error {
+    color: var(--danger);
+    font-size: 13px;
+    margin: 4px 0 0;
+    display: none;
+  }
+  .result-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+  }
+  #statusLine { font-size: 13px; }
+  pre {
+    background: #0a0a0a;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 14px;
+    font-family: var(--mono);
+    font-size: 12px;
+    line-height: 1.5;
+    overflow-x: auto;
+    max-height: 480px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+    margin: 0;
+  }
+  .hint {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-top: 16px;
+    line-height: 1.6;
+  }
+  .hint a { color: #6fb1ff; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>YouTube Data API v3 tester</h1>
+  <p class="subtitle">Test search, videos, channels, playlist and comment endpoints with your own API key. Runs entirely in your browser — your key never leaves your machine except to call Google's API directly.</p>
+
+  <div class="card">
+    <label for="apiKey">API key</label>
+    <input type="text" id="apiKey" placeholder="Your YouTube Data API v3 key" autocomplete="off" spellcheck="false" />
+
+    <label for="endpoint">Endpoint</label>
+    <select id="endpoint">
+      <option value="search">search.list — find videos/channels</option>
+      <option value="videos">videos.list — video details</option>
+      <option value="channels">channels.list — channel details</option>
+      <option value="playlistItems">playlistItems.list — playlist videos</option>
+      <option value="commentThreads">commentThreads.list — top comments</option>
+    </select>
+
+    <div id="paramFields"></div>
+
+    <p id="statsLine" style="font-size:12px; color:var(--text-secondary); margin:0 0 12px;">Requests sent this session: 0 &nbsp;•&nbsp; Estimated quota units used: 0</p>
+
+    <button id="runBtn">Run request</button>
+    <p id="errorMsg" class="error"></p>
+  </div>
+
+  <div class="card" id="resultWrap" style="display:none;">
+    <div class="result-header">
+      <span id="statusLine"></span>
+      <button class="secondary" id="copyBtn">Copy JSON</button>
+    </div>
+    <pre id="resultBox"></pre>
+  </div>
+
+  <p class="hint">
+    Your key needs the "YouTube Data API v3" enabled in Google Cloud Console. If it's restricted by HTTP referrer,
+    add the URL you're opening this file from (or leave it unrestricted for local testing). Get a key at
+    <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener">console.cloud.google.com/apis/credentials</a>.
+    The quota estimate above is calculated locally from Google's published per-endpoint costs (search = 100 units,
+    others = 1 unit) — it resets when you reload the page and isn't pulled from Google, since the API itself doesn't
+    return usage data. For your real daily usage, check the
+    <a href="https://console.cloud.google.com/apis/api/youtube.googleapis.com/quotas" target="_blank" rel="noopener">quotas page</a>
+    in Cloud Console.
+  </p>
+</div>
+
+<script>
+const endpointDef = {
+  search: {
+    path: "search",
+    fields: [
+      { key: "q", label: "Search query", placeholder: "lofi hip hop radio", default: "lofi hip hop" },
+      { key: "type", label: "Type", placeholder: "video", default: "video" },
+      { key: "maxResults", label: "Max results", placeholder: "5", default: "5" }
+    ],
+    fixed: { part: "snippet" }
+  },
+  videos: {
+    path: "videos",
+    fields: [
+      { key: "id", label: "Video ID", placeholder: "dQw4w9WgXcQ", default: "dQw4w9WgXcQ" }
+    ],
+    fixed: { part: "snippet,statistics,contentDetails" }
+  },
+  channels: {
+    path: "channels",
+    fields: [
+      { key: "id", label: "Channel ID (leave blank to use handle)", placeholder: "UC_x5XG1OV2P6uZZ5FSM9Ttw", default: "" },
+      { key: "forHandle", label: "Handle (e.g. @google)", placeholder: "@google", default: "@google" }
+    ],
+    fixed: { part: "snippet,statistics" }
+  },
+  playlistItems: {
+    path: "playlistItems",
+    fields: [
+      { key: "playlistId", label: "Playlist ID", placeholder: "PLbpi6ZahtOH6...", default: "" },
+      { key: "maxResults", label: "Max results", placeholder: "5", default: "5" }
+    ],
+    fixed: { part: "snippet" }
+  },
+  commentThreads: {
+    path: "commentThreads",
+    fields: [
+      { key: "videoId", label: "Video ID", placeholder: "dQw4w9WgXcQ", default: "dQw4w9WgXcQ" },
+      { key: "maxResults", label: "Max results", placeholder: "5", default: "5" }
+    ],
+    fixed: { part: "snippet" }
+  }
+};
+
+// Approximate YouTube Data API v3 quota cost per call (Google doesn't return
+// usage in the response, so this is a running estimate based on published costs)
+const quotaCost = {
+  search: 100,
+  videos: 1,
+  channels: 1,
+  playlistItems: 1,
+  commentThreads: 1
+};
+
+let requestsSent = 0;
+let quotaUsed = 0;
+const statsLine = document.getElementById('statsLine');
+
+function updateStats() {
+  statsLine.textContent = 'Requests sent this session: ' + requestsSent +
+    ' \u2022 Estimated quota units used: ' + quotaUsed;
+}
+
+const paramFieldsEl = document.getElementById('paramFields');
+const endpointSel = document.getElementById('endpoint');
+const errorMsg = document.getElementById('errorMsg');
+
+function renderFields(key) {
+  const def = endpointDef[key];
+  paramFieldsEl.innerHTML = '';
+  def.fields.forEach(f => {
+    const label = document.createElement('label');
+    label.textContent = f.label;
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.placeholder = f.placeholder || '';
+    input.value = f.default || '';
+    input.dataset.key = f.key;
+    paramFieldsEl.appendChild(label);
+    paramFieldsEl.appendChild(input);
+  });
+}
+
+endpointSel.addEventListener('change', () => renderFields(endpointSel.value));
+renderFields(endpointSel.value);
+
+document.getElementById('runBtn').addEventListener('click', async () => {
+  errorMsg.style.display = 'none';
+  const key = document.getElementById('apiKey').value.trim();
+  if (!key) {
+    errorMsg.textContent = 'Enter your API key first.';
+    errorMsg.style.display = 'block';
+    return;
+  }
+  const endpointKey = endpointSel.value;
+  const def = endpointDef[endpointKey];
+  const params = new URLSearchParams();
+  params.set('key', key);
+  Object.entries(def.fixed).forEach(([k, v]) => params.set(k, v));
+  const inputs = paramFieldsEl.querySelectorAll('input');
+  inputs.forEach(inp => {
+    const val = inp.value.trim();
+    if (val) params.set(inp.dataset.key, val);
+  });
+
+  const url = 'https://www.googleapis.com/youtube/v3/' + def.path + '?' + params.toString();
+
+  const runBtn = document.getElementById('runBtn');
+  runBtn.disabled = true;
+  runBtn.textContent = 'Running...';
+
+  const resultWrap = document.getElementById('resultWrap');
+  const resultBox = document.getElementById('resultBox');
+  const statusLine = document.getElementById('statusLine');
+
+  try {
+    const res = await fetch(url);
+    const data = await res.json();
+    resultWrap.style.display = 'block';
+
+    requestsSent += 1;
+    if (res.ok) {
+      quotaUsed += quotaCost[endpointKey] || 1;
+    }
+    updateStats();
+
+    if (res.status === 200) {
+      statusLine.textContent = 'Status 200 \u2014 working just fine! Your request went through.';
+      statusLine.style.color = 'var(--success)';
+    } else {
+      statusLine.textContent = 'Status ' + res.status + ' ' + res.statusText;
+      statusLine.style.color = 'var(--danger)';
+    }
+    resultBox.textContent = JSON.stringify(data, null, 2);
+  } catch (err) {
+    resultWrap.style.display = 'block';
+    statusLine.textContent = 'Request failed';
+    statusLine.style.color = 'var(--danger)';
+    resultBox.textContent = String(err);
+  } finally {
+    runBtn.disabled = false;
+    runBtn.textContent = 'Run request';
+  }
+});
+
+document.getElementById('copyBtn').addEventListener('click', () => {
+  const text = document.getElementById('resultBox').textContent;
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = document.getElementById('copyBtn');
+    const orig = btn.textContent;
+    btn.textContent = 'Copied';
+    setTimeout(() => btn.textContent = orig, 1500);
+  });
+});
+</script>
+</body>
+</html>
