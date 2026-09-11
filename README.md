@@ -1,5 +1,5 @@
 websites some may not work at times because the school will block it big update 
-https://professional-bronze-d6z8jcc73h.edgeone.app/
+https://cerulean-panda-0d1b5d.netlify.app/
 
 
 
